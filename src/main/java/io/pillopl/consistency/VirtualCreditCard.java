@@ -1,0 +1,85 @@
+package io.pillopl.consistency;
+
+import org.javamoney.moneta.Money;
+
+import java.util.UUID;
+
+import static io.pillopl.consistency.Result.Success;
+
+
+class VirtualCreditCard {
+
+    private final CardId cardId = CardId.random();
+    private Limit limit;
+    private int withdrawalsInCycle;
+
+    static VirtualCreditCard withLimit(Money limit) {
+        VirtualCreditCard card = new VirtualCreditCard();
+        card.assignLimit(limit);
+        return card;
+    }
+
+    Result assignLimit(Money limit) {
+        this.limit = Limit.initial(limit);
+        return Success;
+    }
+
+    Result withdraw(Money amount) {
+        if (availableLimit().isLessThan(amount)) {
+            return Result.Failure;
+        }
+        if (this.withdrawalsInCycle >= 45) {
+            return Result.Failure;
+        }
+        this.limit = limit.use(amount);
+        this.withdrawalsInCycle++;
+        return Success;
+    }
+
+    Result repay(Money amount) {
+        this.limit = limit.topUp(amount);
+        return Success;
+    }
+
+    Result closeCycle() {
+        this.withdrawalsInCycle = 0;
+        return Success;
+    }
+
+    Money availableLimit() {
+        return limit.available();
+    }
+
+}
+
+
+enum Result {
+    Success, Failure
+}
+
+
+record CardId(UUID id) {
+    static CardId random() {
+        return new CardId(UUID.randomUUID());
+    }
+}
+
+record Limit(Money max, Money used) {
+
+    static Limit initial(Money max) {
+        return new Limit(max, Money.zero(max.getCurrency()));
+    }
+
+    Limit use(Money amount) {
+        return new Limit(max, used.add(amount));
+    }
+
+    Limit topUp(Money amount) {
+        Money used = this.used.subtract(amount);
+        return new Limit(max, used.isPositiveOrZero() ? used : Money.zero(max.getCurrency()));
+    }
+
+    public Money available() {
+        return max.subtract(used);
+    }
+}
