@@ -2,29 +2,52 @@ package io.pillopl.consistency;
 
 import org.javamoney.moneta.Money;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
 
-import static io.pillopl.consistency.Result.Failure;
 import static io.pillopl.consistency.Result.Success;
 
 
 class VirtualCreditCard {
 
-    private final CardId cardId = CardId.random();
+    private final CardId cardId;
     private Limit limit;
     private int withdrawalsInCycle;
+    private List<Event> pendingEvents = new ArrayList<>();
 
     static VirtualCreditCard withLimit(Money limit) {
-        VirtualCreditCard card = new VirtualCreditCard();
+        VirtualCreditCard card = new VirtualCreditCard(CardId.random());
         card.assignLimit(limit);
         return card;
     }
 
+    static VirtualCreditCard recreate(CardId cardId, List<Event> stream) {
+        return stream.stream()
+                .reduce(new VirtualCreditCard(cardId), (card, event) -> {
+                    switch (event) {
+                        case LimitAssigned e -> card.limitAssigned(e);
+                        case CardWithdrawn e -> card.cardWithdrawn(e);
+                        case CardRepaid e -> card.cardRepaid(e);
+                        case CycleClosed e -> card.billingCycleClosed(e);
+                        default -> {}
+                    }
+                    return card;
+                }, (card1, card2) -> card1);
+    }
+
+    VirtualCreditCard(CardId cardId) {
+        this.cardId = cardId;
+    }
+
     Result assignLimit(Money limit) {
-        this.limit = Limit.initial(limit);
+        limitAssigned(new LimitAssigned(UUID.randomUUID(), cardId, Instant.now(), limit));
         return Success;
+    }
+
+    private VirtualCreditCard limitAssigned(LimitAssigned event) {
+        this.limit = Limit.initial(event.amount());
+        pendingEvents.add(event);
+        return this;
     }
 
     Result withdraw(Money amount) {
@@ -34,20 +57,37 @@ class VirtualCreditCard {
         if (this.withdrawalsInCycle >= 45) {
             return Result.Failure;
         }
-
-        this.limit = limit.use(amount);
-        this.withdrawalsInCycle++;
+        cardWithdrawn(new CardWithdrawn(UUID.randomUUID(), cardId, Instant.now(), amount));
         return Success;
+    }
+
+    private VirtualCreditCard cardWithdrawn(CardWithdrawn event) {
+        this.limit = limit.use(event.amount());
+        this.withdrawalsInCycle++;
+        pendingEvents.add(event);
+        return this;
     }
 
     Result repay(Money amount) {
-        this.limit = limit.topUp(amount);
+        cardRepaid(new CardRepaid(UUID.randomUUID(), cardId, Instant.now(), amount));
         return Success;
     }
 
+    private VirtualCreditCard cardRepaid(CardRepaid event) {
+        this.limit = limit.topUp(event.amount());
+        pendingEvents.add(event);
+        return this;
+    }
+
     Result closeCycle() {
-        this.withdrawalsInCycle = 0;
+        billingCycleClosed(new CycleClosed(UUID.randomUUID(), cardId, Instant.now()));
         return Success;
+    }
+
+    private VirtualCreditCard billingCycleClosed(CycleClosed event) {
+        this.withdrawalsInCycle = 0;
+        pendingEvents.add(event);
+        return this;
     }
 
     Money availableLimit() {
@@ -56,6 +96,14 @@ class VirtualCreditCard {
 
     CardId id() {
         return cardId;
+    }
+
+    List<Event> pendingEvents() {
+        return Collections.unmodifiableList(pendingEvents);
+    }
+
+    void flush() {
+        pendingEvents.clear();
     }
 }
 
@@ -126,4 +174,27 @@ record Ownership(Set<OwnerId> owners) {
     int size() {
         return owners.size();
     }
+}
+
+interface Event {
+    CardId aggregateId();
+
+    UUID id();
+
+    Instant occuredAt();
+}
+
+record CardCreated(UUID id, CardId aggregateId, Instant occuredAt) implements Event {
+}
+
+record CardRepaid(UUID id, CardId aggregateId, Instant occuredAt, Money amount) implements Event {
+}
+
+record LimitAssigned(UUID id, CardId aggregateId, Instant occuredAt, Money amount) implements Event {
+}
+
+record CardWithdrawn(UUID id, CardId aggregateId, Instant occuredAt, Money amount) implements Event {
+}
+
+record CycleClosed(UUID id, CardId aggregateId, Instant occuredAt) implements Event {
 }

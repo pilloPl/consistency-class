@@ -12,9 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class VirtualCreditCardTest {
 
-    static OwnerId OSKAR = OwnerId.random();
-    static OwnerId KUBA = OwnerId.random();
-
     @Test
     void canWithdraw() {
         //given

@@ -2,7 +2,6 @@ package io.pillopl.consistency;
 
 import org.javamoney.moneta.Money;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.OS;
 
 import java.util.stream.IntStream;
 
@@ -199,7 +198,7 @@ class WithdrawingTest {
     }
 
     CardId newCreditCard() {
-        VirtualCreditCard virtualCreditCard = new VirtualCreditCard();
+        VirtualCreditCard virtualCreditCard = new VirtualCreditCard(CardId.random());
         creditCardDatabase.save(virtualCreditCard);
         return virtualCreditCard.id();
     }
