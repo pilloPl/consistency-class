@@ -15,17 +15,10 @@ class VirtualCreditCard {
     private final CardId cardId = CardId.random();
     private Limit limit;
     private int withdrawalsInCycle;
-    private Ownership ownership = Ownership.empty();
 
     static VirtualCreditCard withLimit(Money limit) {
         VirtualCreditCard card = new VirtualCreditCard();
         card.assignLimit(limit);
-        return card;
-    }
-
-    static VirtualCreditCard withLimitAndOwner(Money limit, OwnerId ownerId) {
-        VirtualCreditCard card = withLimit(limit);
-        card.addAccess(ownerId);
         return card;
     }
 
@@ -34,16 +27,14 @@ class VirtualCreditCard {
         return Success;
     }
 
-    Result withdraw(Money amount, OwnerId ownerId) {
+    Result withdraw(Money amount) {
         if (availableLimit().isLessThan(amount)) {
             return Result.Failure;
         }
         if (this.withdrawalsInCycle >= 45) {
             return Result.Failure;
         }
-        if (!ownership.hasAccess(ownerId)) {
-            return Result.Failure;
-        }
+
         this.limit = limit.use(amount);
         this.withdrawalsInCycle++;
         return Success;
@@ -63,19 +54,9 @@ class VirtualCreditCard {
         return limit.available();
     }
 
-    Result addAccess(OwnerId owner) {
-        if (ownership.size() >= 2) {
-            return Failure;
-        }
-        this.ownership = ownership.addAccess(owner);
-        return Success;
+    CardId id() {
+        return cardId;
     }
-
-    Result revokeAccess(OwnerId owner) {
-        this.ownership = ownership.revoke(owner);
-        return Success;
-    }
-
 }
 
 

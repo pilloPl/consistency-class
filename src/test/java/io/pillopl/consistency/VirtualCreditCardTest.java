@@ -18,10 +18,10 @@ class VirtualCreditCardTest {
     @Test
     void canWithdraw() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
+        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
 
         //when
-        Result result = creditCard.withdraw(of(50, "USD"), OSKAR);
+        Result result = creditCard.withdraw(of(50, "USD"));
 
         //then
         assertEquals(Success, result);
@@ -31,10 +31,10 @@ class VirtualCreditCardTest {
     @Test
     void cantWithdrawMoreThanLimit() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
+        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
 
         //when
-        Result result = creditCard.withdraw(of(500, "USD"), OSKAR);
+        Result result = creditCard.withdraw(of(500, "USD"));
 
         //then
         assertEquals(Failure, result);
@@ -44,13 +44,13 @@ class VirtualCreditCardTest {
     @Test
     void cantWithdrawMoreThan45TimesInCycle() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
+        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
 
         //and
-        IntStream.range(1, 46).forEach(i -> creditCard.withdraw(of(1, "USD"), OSKAR));
+        IntStream.range(1, 46).forEach(i -> creditCard.withdraw(of(1, "USD")));
 
         //when
-        Result result = creditCard.withdraw(of(1, "USD"), OSKAR);
+        Result result = creditCard.withdraw(of(1, "USD"));
 
         //then
         assertEquals(Failure, result);
@@ -60,9 +60,9 @@ class VirtualCreditCardTest {
     @Test
     void canRepay() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
+        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
         //and
-        creditCard.withdraw(of(50, "USD"), OSKAR);
+        creditCard.withdraw(of(50, "USD"));
 
         //when
         Result result = creditCard.repay(of(40, "USD"));
@@ -75,84 +75,21 @@ class VirtualCreditCardTest {
     @Test
     void canWithdrawInNextCycle() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
+        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
 
         //and
-        IntStream.range(1, 46).forEach(i -> creditCard.withdraw(of(1, "USD"), OSKAR));
+        IntStream.range(1, 46).forEach(i -> creditCard.withdraw(of(1, "USD")));
 
         //and
         creditCard.closeCycle();
 
         //when
-        Result result = creditCard.withdraw(of(1, "USD"), OSKAR);
+        Result result = creditCard.withdraw(of(1, "USD"));
 
         //then
         assertEquals(Success, result);
         assertEquals(Money.of(54, "USD"), creditCard.availableLimit());
     }
 
-    @Test
-    void canWithdrawWhenNoAccess() {
-        //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
-
-        //when
-        Result result = creditCard.withdraw(of(50, "USD"), KUBA);
-
-        //then
-        assertEquals(Failure, result);
-        assertEquals(Money.of(100, "USD"), creditCard.availableLimit());
-    }
-
-    @Test
-    void canAddAccess() {
-        //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
-
-        //when
-        Result accessResult = creditCard.addAccess(KUBA);
-
-        //then
-        Result withdrawResult = creditCard.withdraw(of(50, "USD"), KUBA);
-        assertEquals(Success, accessResult);
-        assertEquals(Success, withdrawResult);
-        assertEquals(Money.of(50, "USD"), creditCard.availableLimit());
-    }
-
-    @Test
-    void cantAddMoreThan2Owners() {
-        //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
-        //and
-        Result secondAccess = creditCard.addAccess(KUBA);
-
-        //when
-        Result thirdAccess = creditCard.addAccess(OwnerId.random());
-
-        //then
-        assertEquals(Success, secondAccess);
-        assertEquals(Failure, thirdAccess);
-    }
-
-    @Test
-    void cantRevokeAccess() {
-        //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimitAndOwner(of(100, "USD"), OSKAR);
-        //and
-        Result access = creditCard.addAccess(KUBA);
-        //and
-        Result withdrawResult = creditCard.withdraw(of(50, "USD"), KUBA);
-
-        //when
-        Result revoke = creditCard.revokeAccess(KUBA);
-
-        //then
-        Result secondWithdrawResult = creditCard.withdraw(of(50, "USD"), KUBA);
-
-        //then
-        assertEquals(Success, revoke);
-        assertEquals(Success, withdrawResult);
-        assertEquals(Failure, secondWithdrawResult);
-    }
 
 }
