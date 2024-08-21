@@ -18,9 +18,7 @@ class VirtualCreditCardDatabase {
 
      VirtualCreditCard find(CardId cardId) {
          List<Event> stream = cards.getOrDefault(cardId, new ArrayList<>());
-         VirtualCreditCard recreate = VirtualCreditCard.recreate(cardId, stream);
-         recreate.flush(); //wink wink ;)
-         return recreate;
+         return VirtualCreditCard.recreate(cardId, stream);
      }
 }
 

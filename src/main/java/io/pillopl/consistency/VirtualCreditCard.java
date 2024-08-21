@@ -13,7 +13,7 @@ class VirtualCreditCard {
     private final CardId cardId;
     private Limit limit;
     private int withdrawalsInCycle;
-    private List<Event> pendingEvents = new ArrayList<>();
+    private final List<Event> pendingEvents = new ArrayList<>();
 
     static VirtualCreditCard withLimit(Money limit) {
         VirtualCreditCard card = new VirtualCreditCard(CardId.random());
@@ -23,16 +23,11 @@ class VirtualCreditCard {
 
     static VirtualCreditCard recreate(CardId cardId, List<Event> stream) {
         return stream.stream()
-                .reduce(new VirtualCreditCard(cardId), (card, event) -> {
-                    switch (event) {
-                        case LimitAssigned e -> card.limitAssigned(e);
-                        case CardWithdrawn e -> card.cardWithdrawn(e);
-                        case CardRepaid e -> card.cardRepaid(e);
-                        case CycleClosed e -> card.billingCycleClosed(e);
-                        default -> {}
-                    }
-                    return card;
-                }, (card1, card2) -> card1);
+                .reduce(
+                        new VirtualCreditCard(cardId),
+                        VirtualCreditCard::evolve,
+                        (card1, card2) -> card1
+                );
     }
 
     VirtualCreditCard(CardId cardId) {
@@ -40,13 +35,14 @@ class VirtualCreditCard {
     }
 
     Result assignLimit(Money limit) {
-        limitAssigned(new LimitAssigned(UUID.randomUUID(), cardId, Instant.now(), limit));
+        var event = new LimitAssigned(UUID.randomUUID(), cardId, Instant.now(), limit);
+        limitAssigned(event);
+        pendingEvents.add(event);
         return Success;
     }
 
     private VirtualCreditCard limitAssigned(LimitAssigned event) {
         this.limit = Limit.initial(event.amount());
-        pendingEvents.add(event);
         return this;
     }
 
@@ -57,37 +53,50 @@ class VirtualCreditCard {
         if (this.withdrawalsInCycle >= 45) {
             return Result.Failure;
         }
-        cardWithdrawn(new CardWithdrawn(UUID.randomUUID(), cardId, Instant.now(), amount));
+        var event = new CardWithdrawn(UUID.randomUUID(), cardId, Instant.now(), amount);
+        cardWithdrawn(event);
+        pendingEvents.add(event);
         return Success;
     }
 
     private VirtualCreditCard cardWithdrawn(CardWithdrawn event) {
         this.limit = limit.use(event.amount());
         this.withdrawalsInCycle++;
-        pendingEvents.add(event);
         return this;
     }
 
     Result repay(Money amount) {
-        cardRepaid(new CardRepaid(UUID.randomUUID(), cardId, Instant.now(), amount));
+        var event = new CardRepaid(UUID.randomUUID(), cardId, Instant.now(), amount);
+        cardRepaid(event);
+        pendingEvents.add(event);
         return Success;
     }
 
     private VirtualCreditCard cardRepaid(CardRepaid event) {
         this.limit = limit.topUp(event.amount());
-        pendingEvents.add(event);
         return this;
     }
 
     Result closeCycle() {
-        billingCycleClosed(new CycleClosed(UUID.randomUUID(), cardId, Instant.now()));
+        var event = new CycleClosed(UUID.randomUUID(), cardId, Instant.now());
+        billingCycleClosed(event);
+        pendingEvents.add(event);
         return Success;
     }
 
     private VirtualCreditCard billingCycleClosed(CycleClosed event) {
         this.withdrawalsInCycle = 0;
-        pendingEvents.add(event);
         return this;
+    }
+
+    private static VirtualCreditCard evolve(VirtualCreditCard card, Event event) {
+        return switch (event) {
+            case LimitAssigned e -> card.limitAssigned(e);
+            case CardWithdrawn e -> card.cardWithdrawn(e);
+            case CardRepaid e -> card.cardRepaid(e);
+            case CycleClosed e -> card.billingCycleClosed(e);
+            default -> card;
+        };
     }
 
     Money availableLimit() {
