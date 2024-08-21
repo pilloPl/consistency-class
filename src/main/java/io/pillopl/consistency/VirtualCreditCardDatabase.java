@@ -16,13 +16,12 @@ class VirtualCreditCardDatabase {
         var cartId = card.id().id().toString();
         AtomicInteger version = new AtomicInteger(stream.size());
 
-        var newEvents = card.pendingEvents().stream().map(e ->
+        var newEvents = card.dequeuePendingEvents().stream().map(e ->
                 EventEnvelope.from(cartId, e, version.incrementAndGet())
         ).toList();
 
         stream.addAll(newEvents);
         cards.put(card.id(), stream);
-        card.flush();
     }
 
     VirtualCreditCard find(CardId cardId) {
