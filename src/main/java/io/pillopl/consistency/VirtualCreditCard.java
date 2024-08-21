@@ -16,9 +16,9 @@ class VirtualCreditCard {
     private final List<Event> pendingEvents = new ArrayList<>();
 
     static VirtualCreditCard withLimit(Money limit) {
-        VirtualCreditCard card = new VirtualCreditCard(CardId.random());
-        card.assignLimit(limit);
-        return card;
+        var cartId = CardId.random();
+        List<Event> events = List.of(new LimitAssigned(UUID.randomUUID(), cartId, Instant.now(), limit));
+        return recreate(CardId.random(), events);
     }
 
     static VirtualCreditCard recreate(CardId cardId, List<Event> stream) {
