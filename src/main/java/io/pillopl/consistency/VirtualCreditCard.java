@@ -106,8 +106,10 @@ class VirtualCreditCard {
         return cardId;
     }
 
-    List<VirtualCreditCardEvent> pendingEvents() {
-        return Collections.unmodifiableList(pendingEvents);
+    List<VirtualCreditCardEvent> dequeuePendingEvents() {
+        var result = pendingEvents.stream().toList();
+        pendingEvents.clear();
+        return result;        
     }
 
     Result success(VirtualCreditCardEvent event) {
@@ -118,10 +120,6 @@ class VirtualCreditCard {
     void enqueue(VirtualCreditCardEvent event) {
         evolve(this, event);
         pendingEvents.add(event);
-    }
-
-    void flush() {
-        pendingEvents.clear();
     }
 }
 
