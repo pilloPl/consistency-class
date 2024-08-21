@@ -27,7 +27,7 @@ class VirtualCreditCardDatabase {
 
     VirtualCreditCard find(CardId cardId) {
         List<EventEnvelope> stream = cards.getOrDefault(cardId, new ArrayList<>());
-        return VirtualCreditCard.recreate(cardId, stream.stream()
+        return VirtualCreditCard.recreate(stream.stream()
                 .map(EventEnvelope::data)
                 .filter(event -> event instanceof VirtualCreditCardEvent)
                 .map(event -> (VirtualCreditCardEvent) event)
