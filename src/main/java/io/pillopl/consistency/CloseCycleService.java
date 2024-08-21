@@ -11,9 +11,10 @@ class CloseCycleService {
     Result close(CardId cardId) {
         VirtualCreditCard card = virtualCreditCardDatabase.find(cardId);
         Result result = card.closeCycle();
-        virtualCreditCardDatabase.save(card);
-        return result;
 
+        return result == Result.Success ?
+            virtualCreditCardDatabase.save(card)
+            : result;
     }
 }
 

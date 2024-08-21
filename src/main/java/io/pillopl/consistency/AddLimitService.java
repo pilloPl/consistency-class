@@ -9,12 +9,12 @@ class AddLimitService {
     AddLimitService(VirtualCreditCardDatabase virtualCreditCardDatabase) {
         this.virtualCreditCardDatabase = virtualCreditCardDatabase;
     }
-    
+
     Result addLimit(CardId cardId, Money limit) {
         VirtualCreditCard card = virtualCreditCardDatabase.find(cardId);
         Result result = card.assignLimit(limit);
         virtualCreditCardDatabase.save(card);
         return result;
     }
-    
+
 }

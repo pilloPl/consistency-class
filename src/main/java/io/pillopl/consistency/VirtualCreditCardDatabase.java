@@ -1,72 +1,53 @@
 package io.pillopl.consistency;
 
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class VirtualCreditCardDatabase {
-    private final Map<CardId, List<EventEnvelope>> cards = new ConcurrentHashMap<>();
+    private final DatabaseCollection<EventStream> cards =
+        Database.collection(EventStream.class);
 
-    void save(VirtualCreditCard card) {
-        List<EventEnvelope> stream = cards.getOrDefault(card.id(), new ArrayList<>());
+    Result save(VirtualCreditCard card) {
         var cartId = card.id().id().toString();
-        AtomicInteger version = new AtomicInteger(stream.size());
+
+        var stream = cards.find(cartId).orElseGet(() -> EventStream.empty(cartId));
+
+        var version = new AtomicInteger(stream.events().size());
 
         var newEvents = card.dequeuePendingEvents().stream().map(e ->
-                EventEnvelope.from(cartId, e, version.incrementAndGet())
+            EventEnvelope.from(cartId, e, version.incrementAndGet())
         ).toList();
 
-        stream.addAll(newEvents);
-        cards.put(card.id(), stream);
+
+        return cards.save(cartId, stream.append(newEvents));
     }
 
     VirtualCreditCard find(CardId cardId) {
-        List<EventEnvelope> stream = cards.getOrDefault(cardId, new ArrayList<>());
-        return VirtualCreditCard.recreate(stream.stream()
-                .map(EventEnvelope::data)
-                .filter(event -> event instanceof VirtualCreditCardEvent)
-                .map(event -> (VirtualCreditCardEvent) event)
-                .toList()
+        var cartId = cardId.id().toString();
+
+        var stream = cards.find(cartId)
+            .orElseGet(() -> EventStream.empty(cartId));
+
+        return VirtualCreditCard.recreate(stream.events().stream()
+            .map(EventEnvelope::data)
+            .filter(event -> event instanceof VirtualCreditCardEvent)
+            .map(event -> (VirtualCreditCardEvent) event)
+            .toList()
         );
     }
 }
 
-record EventMetadata(
-        String streamId,
-        String eventType,
-        UUID eventId,
-        int version,
-        Instant occurredAt
-) {
-    public static <T> EventMetadata from(Class<T> eventType, String streamId, int version) {
-        return new EventMetadata(streamId, eventType.getTypeName(), UUID.randomUUID(), version, Instant.now());
-    }
-}
-
-record EventEnvelope(
-        Object data,
-        EventMetadata metadata
-) {
-
-    public static <T> EventEnvelope from(String streamId, Object event, int version) {
-        return new EventEnvelope(event, EventMetadata.from(event.getClass(), streamId, version));
-    }
-}
 
 class OwnershipDatabase {
 
-    private final Map<CardId, Ownership> ownerships = new ConcurrentHashMap<>();
+    private final DatabaseCollection<Ownership> ownerships =
+        Database.collection(Ownership.class);
 
-    void save(CardId cardId, Ownership ownership) {
-        ownerships.put(cardId, ownership);
+    Result save(CardId cardId, Ownership ownership) {
+        return ownerships.save(cardId.id().toString(), ownership);
     }
 
     Ownership find(CardId cardId) {
-        return ownerships.getOrDefault(cardId, Ownership.empty());
+        return ownerships.find(cardId.id().toString()).orElse(Ownership.empty());
     }
 
 }
