@@ -14,14 +14,12 @@ class OwnershipService {
             return Result.Failure;
         }
         ownership = ownership.addAccess(ownerId);
-        ownershipDatabase.save(cardId, ownership);
-        return Result.Success;
+        return ownershipDatabase.save(cardId, ownership);
     }
 
     Result revokeAccess(CardId cardId, OwnerId ownerId) {
         Ownership ownership = ownershipDatabase.find(cardId);
         ownership = ownership.revoke(ownerId);
-        ownershipDatabase.save(cardId, ownership);
-        return Result.Success;
+        return ownershipDatabase.save(cardId, ownership);
     }
 }
