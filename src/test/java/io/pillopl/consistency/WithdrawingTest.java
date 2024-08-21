@@ -198,7 +198,7 @@ class WithdrawingTest {
     }
 
     CardId newCreditCard() {
-        VirtualCreditCard virtualCreditCard = new VirtualCreditCard(CardId.random());
+        VirtualCreditCard virtualCreditCard = VirtualCreditCard.create(CardId.random());
         creditCardDatabase.save(virtualCreditCard);
         return virtualCreditCard.id();
     }
