@@ -1,16 +1,16 @@
 package io.pillopl.consistency;
 
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 interface Versioned {
-    int getVersion();
+    int version();
+}
 
+interface VersionedWithAutoIncrement extends Versioned {
     void setVersion(int version);
 }
 
@@ -24,7 +24,6 @@ class Database {
     }
 }
 
-
 class DatabaseCollection<T> {
     private final Class<T> entryClass;
     private final Map<String, RecordWithVersion> entries = new ConcurrentHashMap<>();
@@ -35,7 +34,7 @@ class DatabaseCollection<T> {
 
     Result save(String id, T record) {
         return save(id, record, record instanceof Versioned versioned ?
-            versioned.getVersion()
+            versioned.version()
             : entries.getOrDefault(id, RecordWithVersion.noRecord).version()
         );
     }
@@ -52,7 +51,7 @@ class DatabaseCollection<T> {
                 return currentValue;  // Keep the currentValue in the map
             }
 
-            if (record instanceof Versioned versioned) {
+            if (record instanceof VersionedWithAutoIncrement versioned) {
                 versioned.setVersion(newExpectedVersion);
             }
             wasUpdated.set(true);
@@ -71,45 +70,13 @@ class DatabaseCollection<T> {
             : Optional.empty();
     }
 
-    Result findAndUpdate(Class<T> recordClass, String id, Function<T, T> handle, Supplier<T> getDefault) {
+    Result handle(String id, Function<T, T> handle, Supplier<T> getDefault) {
         var entry = entries.getOrDefault(id, RecordWithVersion.noRecord);
 
         var result = handle.apply(Optional.ofNullable(entry.record())
-            .map(recordClass::cast)
+            .map(entryClass::cast)
             .orElse(getDefault.get()));
 
         return save(id, result, entry.version());
-    }
-}
-
-record EventStream(String id, List<EventEnvelope> events) {
-    static EventStream empty(String id) {
-        return new EventStream(null, new ArrayList<>());
-    }
-
-    EventStream append(List<EventEnvelope> events) {
-        return new EventStream(id, Stream.concat(this.events.stream(), events.stream()).toList());
-    }
-}
-
-record EventMetadata(
-    String streamId,
-    String eventType,
-    UUID eventId,
-    int version,
-    Instant occurredAt
-) {
-    public static <T> EventMetadata from(Class<T> eventType, String streamId, int version) {
-        return new EventMetadata(streamId, eventType.getTypeName(), UUID.randomUUID(), version, Instant.now());
-    }
-}
-
-record EventEnvelope(
-    Object data,
-    EventMetadata metadata
-) {
-
-    public static <T> EventEnvelope from(String streamId, Object event, int version) {
-        return new EventEnvelope(event, EventMetadata.from(event.getClass(), streamId, version));
     }
 }

@@ -12,9 +12,13 @@ class RepayService {
 
     Result repay(CardId cardId, Money amount) {
         VirtualCreditCard card = virtualCreditCardDatabase.find(cardId);
+        int expectedVersion = card.version();
+
         Result result = card.repay(amount);
-        virtualCreditCardDatabase.save(card);
-        return result;
+
+        return result == Result.Success ?
+            virtualCreditCardDatabase.save(card, expectedVersion)
+            : result;
 
     }
 }

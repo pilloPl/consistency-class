@@ -13,13 +13,18 @@ class WithdrawService {
     }
 
     Result withdraw(CardId cardId, Money amount, OwnerId ownerId) {
-        if (ownershipDatabase.find(cardId).hasAccess(ownerId)) {
-            VirtualCreditCard card = virtualCreditCardDatabase.find(cardId);
-            Result result = card.withdraw(amount);
-            virtualCreditCardDatabase.save(card);
-            return result;
+        if (!ownershipDatabase.find(cardId).hasAccess(ownerId)) {
+            return Result.Failure;
         }
-        return Result.Failure;
+
+        VirtualCreditCard card = virtualCreditCardDatabase.find(cardId);
+        int expectedVersion = card.version();
+
+        Result result = card.withdraw(amount);
+
+        return result == Result.Success ?
+            virtualCreditCardDatabase.save(card, expectedVersion)
+            : Result.Failure;
     }
 }
 

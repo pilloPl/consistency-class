@@ -8,26 +8,27 @@ import java.util.*;
 import static io.pillopl.consistency.Result.Success;
 import static io.pillopl.consistency.VirtualCreditCardEvent.*;
 
-class VirtualCreditCard {
+class VirtualCreditCard implements Versioned {
 
     private CardId cardId;
     private Limit limit;
     private int withdrawalsInCycle;
     private final List<VirtualCreditCardEvent> pendingEvents = new ArrayList<>();
+    private int version;
 
     static VirtualCreditCard withLimit(Money limit) {
         var cartId = CardId.random();
-        List<VirtualCreditCardEvent> events = List.of(new LimitAssigned(cartId, Instant.now(), limit));
+        List<VirtualCreditCardEvent> events = List.of(new LimitAssigned(cartId, limit, Instant.now()));
         return recreate(events);
     }
 
     static VirtualCreditCard recreate(List<VirtualCreditCardEvent> stream) {
         return stream.stream()
-                .reduce(
-                        new VirtualCreditCard(),
-                        VirtualCreditCard::evolve,
-                        (card1, card2) -> card1
-                );
+            .reduce(
+                new VirtualCreditCard(),
+                VirtualCreditCard::evolve,
+                (card1, card2) -> card1
+            );
     }
 
     private VirtualCreditCard() {
@@ -46,7 +47,7 @@ class VirtualCreditCard {
     }
 
     Result assignLimit(Money limit) {
-        return success(new LimitAssigned(cardId, Instant.now(), limit));
+        return success(new LimitAssigned(cardId, limit, Instant.now()));
     }
 
     private VirtualCreditCard limitAssigned(LimitAssigned event) {
@@ -61,7 +62,7 @@ class VirtualCreditCard {
         if (this.withdrawalsInCycle >= 45) {
             return Result.Failure;
         }
-        return success(new CardWithdrawn(cardId, Instant.now(), amount));
+        return success(new CardWithdrawn(cardId, amount, Instant.now()));
     }
 
     private VirtualCreditCard cardWithdrawn(CardWithdrawn event) {
@@ -71,7 +72,7 @@ class VirtualCreditCard {
     }
 
     Result repay(Money amount) {
-        return success(new CardRepaid(cardId, Instant.now(), amount));
+        return success(new CardRepaid(cardId, amount, Instant.now()));
     }
 
     private VirtualCreditCard cardRepaid(CardRepaid event) {
@@ -89,6 +90,7 @@ class VirtualCreditCard {
     }
 
     private static VirtualCreditCard evolve(VirtualCreditCard card, VirtualCreditCardEvent event) {
+        card.version++;
         return switch (event) {
             case CardCreated e -> card.created(e);
             case LimitAssigned e -> card.limitAssigned(e);
@@ -109,7 +111,7 @@ class VirtualCreditCard {
     List<VirtualCreditCardEvent> dequeuePendingEvents() {
         var result = pendingEvents.stream().toList();
         pendingEvents.clear();
-        return result;        
+        return result;
     }
 
     Result success(VirtualCreditCardEvent event) {
@@ -120,6 +122,11 @@ class VirtualCreditCard {
     void enqueue(VirtualCreditCardEvent event) {
         evolve(this, event);
         pendingEvents.add(event);
+    }
+
+    @Override
+    public int version() {
+        return version;
     }
 }
 
@@ -161,14 +168,14 @@ record OwnerId(UUID id) {
     }
 }
 
-record Ownership(Set<OwnerId> owners) {
+record Ownership(Set<OwnerId> owners, int version) implements Versioned {
 
     static Ownership of(OwnerId... owners) {
-        return new Ownership(Set.of(owners));
+        return new Ownership(Set.of(owners), 0);
     }
 
     public static Ownership empty() {
-        return new Ownership(Set.of());
+        return new Ownership(Set.of(), 0);
     }
 
     boolean hasAccess(OwnerId ownerId) {
@@ -178,13 +185,13 @@ record Ownership(Set<OwnerId> owners) {
     Ownership addAccess(OwnerId ownerId) {
         Set<OwnerId> newOwners = new HashSet<>(owners);
         newOwners.add(ownerId);
-        return new Ownership(newOwners);
+        return new Ownership(newOwners, version + 1);
     }
 
     Ownership revoke(OwnerId ownerId) {
         Set<OwnerId> newOwners = new HashSet<>(owners);
         newOwners.remove(ownerId);
-        return new Ownership(newOwners);
+        return new Ownership(newOwners, version + 1);
     }
 
     int size() {
@@ -193,18 +200,36 @@ record Ownership(Set<OwnerId> owners) {
 }
 
 sealed interface VirtualCreditCardEvent {
-    record CardCreated(CardId cartId, Instant createdAt) implements VirtualCreditCardEvent {
+    record CardCreated(
+        CardId cartId,
+        Instant createdAt
+    ) implements VirtualCreditCardEvent {
     }
 
-    record CardRepaid(CardId cartId, Instant repaidAt, Money amount) implements VirtualCreditCardEvent {
+    record CardRepaid(
+        CardId cartId,
+        Money amount,
+        Instant repaidAt
+    ) implements VirtualCreditCardEvent {
     }
 
-    record LimitAssigned(CardId cartId, Instant assignedAt, Money amount) implements VirtualCreditCardEvent {
+    record LimitAssigned(
+        CardId cartId,
+        Money amount,
+        Instant assignedAt
+    ) implements VirtualCreditCardEvent {
     }
 
-    record CardWithdrawn(CardId cartId, Instant withdrawnAt, Money amount) implements VirtualCreditCardEvent {
+    record CardWithdrawn(
+        CardId cartId,
+        Money amount,
+        Instant withdrawnAt
+    ) implements VirtualCreditCardEvent {
     }
 
-    record CycleClosed(CardId cartId, Instant closedAt) implements VirtualCreditCardEvent {
+    record CycleClosed(
+        CardId cartId,
+        Instant closedAt
+    ) implements VirtualCreditCardEvent {
     }
 }

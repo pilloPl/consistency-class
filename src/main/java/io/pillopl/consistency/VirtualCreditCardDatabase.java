@@ -1,53 +1,36 @@
 package io.pillopl.consistency;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 class VirtualCreditCardDatabase {
-    private final DatabaseCollection<EventStream> cards =
-        Database.collection(EventStream.class);
+    private final EventStore eventStore = new EventStore();
 
-    Result save(VirtualCreditCard card) {
-        var cartId = card.id().id().toString();
+    Result save(VirtualCreditCard card, int expectedVersion) {
+        var streamId = card.id().id().toString();
 
-        var stream = cards.find(cartId).orElseGet(() -> EventStream.empty(cartId));
-
-        var version = new AtomicInteger(stream.events().size());
-
-        var newEvents = card.dequeuePendingEvents().stream().map(e ->
-            EventEnvelope.from(cartId, e, version.incrementAndGet())
-        ).toList();
-
-
-        return cards.save(cartId, stream.append(newEvents));
+        return eventStore.appendToStream(
+            streamId,
+            card.dequeuePendingEvents(),
+            expectedVersion
+        );
     }
 
     VirtualCreditCard find(CardId cardId) {
-        var cartId = cardId.id().toString();
+        var streamId = cardId.id().toString();
 
-        var stream = cards.find(cartId)
-            .orElseGet(() -> EventStream.empty(cartId));
+        var events = eventStore.readEvents(VirtualCreditCardEvent.class, streamId);
 
-        return VirtualCreditCard.recreate(stream.events().stream()
-            .map(EventEnvelope::data)
-            .filter(event -> event instanceof VirtualCreditCardEvent)
-            .map(event -> (VirtualCreditCardEvent) event)
-            .toList()
-        );
+        return VirtualCreditCard.recreate(events);
     }
 }
 
-
 class OwnershipDatabase {
-
     private final DatabaseCollection<Ownership> ownerships =
         Database.collection(Ownership.class);
 
-    Result save(CardId cardId, Ownership ownership) {
-        return ownerships.save(cardId.id().toString(), ownership);
+    Result save(CardId cardId, Ownership ownership, int expectedVersion) {
+        return ownerships.save(cardId.id().toString(), ownership, expectedVersion);
     }
 
     Ownership find(CardId cardId) {
         return ownerships.find(cardId.id().toString()).orElse(Ownership.empty());
     }
-
 }

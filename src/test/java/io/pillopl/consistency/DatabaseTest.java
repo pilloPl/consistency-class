@@ -12,7 +12,6 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-
 class DummyEntity {
     private final String id;
 
@@ -25,7 +24,7 @@ class DummyEntity {
     }
 }
 
-class DummyVersionedEntity implements Versioned {
+class DummyVersionedEntity implements VersionedWithAutoIncrement {
     private final String id;
     private int version;
 
@@ -35,7 +34,7 @@ class DummyVersionedEntity implements Versioned {
     }
 
     @Override
-    public int getVersion() {
+    public int version() {
         return version;
     }
 
@@ -91,7 +90,7 @@ public class DatabaseTest {
 
         // then
         assertEquals(Result.Success, result);
-        assertEquals(1, entity.getVersion());
+        assertEquals(1, entity.version());
     }
 
     @Test
@@ -122,7 +121,7 @@ public class DatabaseTest {
         // then
         var entityFromDb = collection.find(id);
         assertTrue(entityFromDb.isPresent());
-        assertEquals(1, entityFromDb.get().getVersion());
+        assertEquals(1, entityFromDb.get().version());
     }
 
     @Test
@@ -139,7 +138,7 @@ public class DatabaseTest {
 
             // then
             assertEquals(Result.Success, result);
-            assertEquals(++currentVersion, entity.getVersion());
+            assertEquals(++currentVersion, entity.version());
         } while(currentVersion < 5);
     }
 
@@ -174,7 +173,7 @@ public class DatabaseTest {
 
             // then
             assertEquals(Result.Success, result);
-            assertEquals(++currentVersion, entity.getVersion());
+            assertEquals(++currentVersion, entity.version());
         } while(currentVersion < 5);
     }
 
@@ -192,7 +191,7 @@ public class DatabaseTest {
 
         // then
         assertEquals(Result.Success, result);
-        assertEquals(2, entity.getVersion());
+        assertEquals(2, entity.version());
     }
 
     @Test
@@ -226,7 +225,7 @@ public class DatabaseTest {
 
         // then
         assertEquals(Result.Failure, result);
-        assertEquals(1, entity.getVersion());
+        assertEquals(1, entity.version());
     }
 
     @Test
@@ -253,6 +252,6 @@ public class DatabaseTest {
 
         //then
         assertTrue(results.contains(Result.Failure));
-        assertTrue(collection.find(id).orElse(new DummyVersionedEntity(id, 0)).getVersion() < 10);
+        assertTrue(collection.find(id).orElse(new DummyVersionedEntity(id, 0)).version() < 10);
     }
 }
