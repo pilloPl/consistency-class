@@ -10,12 +10,12 @@ import static io.pillopl.consistency.Result.Success;
 import static org.javamoney.moneta.Money.of;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class VirtualCreditCardTest {
+class BillingCycleTest {
 
     @Test
     void canWithdraw() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
+        BillingCycle creditCard = BillingCycle.withLimit(of(100, "USD"));
 
         //when
         Result result = creditCard.withdraw(of(50, "USD"));
@@ -28,7 +28,7 @@ class VirtualCreditCardTest {
     @Test
     void cantWithdrawMoreThanLimit() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
+        BillingCycle creditCard = BillingCycle.withLimit(of(100, "USD"));
 
         //when
         Result result = creditCard.withdraw(of(500, "USD"));
@@ -41,7 +41,7 @@ class VirtualCreditCardTest {
     @Test
     void cantWithdrawMoreThan45TimesInCycle() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
+        BillingCycle creditCard = BillingCycle.withLimit(of(100, "USD"));
 
         //and
         IntStream.range(1, 46).forEach(i -> creditCard.withdraw(of(1, "USD")));
@@ -57,7 +57,7 @@ class VirtualCreditCardTest {
     @Test
     void canRepay() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
+        BillingCycle creditCard = BillingCycle.withLimit(of(100, "USD"));
         //and
         creditCard.withdraw(of(50, "USD"));
 
@@ -70,9 +70,9 @@ class VirtualCreditCardTest {
     }
 
     @Test
-    void canWithdrawInNextCycle() {
+    void cannotWithdrawInClosedCycle() {
         //given
-        VirtualCreditCard creditCard = VirtualCreditCard.withLimit(of(100, "USD"));
+        BillingCycle creditCard = BillingCycle.withLimit(of(100, "USD"));
 
         //and
         IntStream.range(1, 46).forEach(i -> creditCard.withdraw(of(1, "USD")));
@@ -84,9 +84,6 @@ class VirtualCreditCardTest {
         Result result = creditCard.withdraw(of(1, "USD"));
 
         //then
-        assertEquals(Success, result);
-        assertEquals(Money.of(54, "USD"), creditCard.availableLimit());
+        assertEquals(Failure, result);
     }
-
-
 }

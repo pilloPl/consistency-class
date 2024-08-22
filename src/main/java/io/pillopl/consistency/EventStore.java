@@ -5,9 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 public class EventStore {
+    public final List<Consumer<Object>> subscribers = new ArrayList<>();
     private final DatabaseCollection<EventStream> streams = Database.collection(EventStream.class);
 
     <T> List<T> readEvents(Class<T> eventType, String streamId) {
@@ -24,7 +26,27 @@ public class EventStore {
             EventEnvelope.from(streamId, e, version.incrementAndGet())
         ).toList();
 
-        return streams.save(streamId, stream.append(newEvents), expectedVersion);
+        var result = streams.save(streamId, stream.append(newEvents), expectedVersion);
+
+        if(result == Result.Success) {
+            // Note: this typically happens asynchronously
+            // to not impact accidentally storing events
+            publish(newEvents);
+        }
+
+        return result;
+    }
+
+    public void subscribe(Consumer<Object> subscriber) {
+        subscribers.add(subscriber);
+    }
+
+    private void publish(List<EventEnvelope> events){
+        for (Consumer<Object> handler : subscribers) {
+            for (var event : events) {
+                handler.accept(event.data());
+            }
+        }
     }
 
     private EventStream existingEventStreamOrEmpty(String streamId) {

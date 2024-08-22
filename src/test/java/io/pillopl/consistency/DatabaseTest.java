@@ -139,7 +139,7 @@ public class DatabaseTest {
             // then
             assertEquals(Result.Success, result);
             assertEquals(++currentVersion, entity.version());
-        } while(currentVersion < 5);
+        } while (currentVersion < 5);
     }
 
     @Test
@@ -156,7 +156,7 @@ public class DatabaseTest {
 
             // then
             assertEquals(Result.Success, result);
-        } while(currentVersion < 5);
+        } while (currentVersion < 5);
     }
 
     @Test
@@ -174,7 +174,7 @@ public class DatabaseTest {
             // then
             assertEquals(Result.Success, result);
             assertEquals(++currentVersion, entity.version());
-        } while(currentVersion < 5);
+        } while (currentVersion < 5);
     }
 
     @Test
@@ -237,8 +237,8 @@ public class DatabaseTest {
         List<Result> results = new ArrayList<>();
         //when
         ExecutorService executor = Executors.newFixedThreadPool(5);
-        for (int i = 0; i<10; i++) {
-            executor.execute(()-> {
+        for (int i = 0; i < 50; i++) {
+            executor.execute(() -> {
                 try {
                     var entity = collection.find(id).orElse(new DummyVersionedEntity(id, 0));
                     results.add(collection.save(id, entity));
@@ -252,6 +252,6 @@ public class DatabaseTest {
 
         //then
         assertTrue(results.contains(Result.Failure));
-        assertTrue(collection.find(id).orElse(new DummyVersionedEntity(id, 0)).version() < 10);
+        assertTrue(collection.find(id).orElse(new DummyVersionedEntity(id, 0)).version() < 50);
     }
 }

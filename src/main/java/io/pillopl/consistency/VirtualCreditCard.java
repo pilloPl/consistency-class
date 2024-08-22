@@ -2,23 +2,35 @@ package io.pillopl.consistency;
 
 import org.javamoney.moneta.Money;
 
+import javax.money.CurrencyUnit;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.*;
 
 import static io.pillopl.consistency.Result.Success;
 import static io.pillopl.consistency.VirtualCreditCardEvent.*;
 
+
 class VirtualCreditCard implements Versioned {
+    record BillingCycle(BillingCycleId id, boolean isOpened) {
+        static BillingCycle NotExisting = new BillingCycle(null, false);
+    }
 
     private CardId cardId;
+    private CurrencyUnit currency;
+    private BillingCycle currentBillingCycle;
     private Limit limit;
-    private int withdrawalsInCycle;
+    private Money debt;
+    private boolean isActive;
     private final List<VirtualCreditCardEvent> pendingEvents = new ArrayList<>();
     private int version;
 
     static VirtualCreditCard withLimit(Money limit) {
         var cartId = CardId.random();
-        List<VirtualCreditCardEvent> events = List.of(new LimitAssigned(cartId, limit, Instant.now()));
+        List<VirtualCreditCardEvent> events = List.of(
+            new CardCreated(cartId, limit.getCurrency(), Instant.now()),
+            new LimitAssigned(cartId, limit, Instant.now())
+        );
         return recreate(events);
     }
 
@@ -35,14 +47,18 @@ class VirtualCreditCard implements Versioned {
 
     }
 
-    static VirtualCreditCard create(CardId cardId) {
+    static VirtualCreditCard create(CardId cardId, CurrencyUnit currency) {
         var cart = new VirtualCreditCard();
-        cart.enqueue(new CardCreated(cardId, Instant.now()));
+        cart.enqueue(new CardCreated(cardId, currency, Instant.now()));
         return cart;
     }
 
     private VirtualCreditCard created(CardCreated event) {
         this.cardId = event.cartId();
+        this.currentBillingCycle = BillingCycle.NotExisting;
+        this.isActive = true;
+        this.currency = event.currency();
+        this.debt = Money.zero(event.currency());
         return this;
     }
 
@@ -51,41 +67,80 @@ class VirtualCreditCard implements Versioned {
     }
 
     private VirtualCreditCard limitAssigned(LimitAssigned event) {
-        this.limit = Limit.initial(event.amount());
+        // Simulating that the debt is transferred to the next cycle
+        this.limit = new Limit(event.amount(), debt);
         return this;
     }
 
-    Result withdraw(Money amount) {
-        if (availableLimit().isLessThan(amount)) {
+    Result openNextCycle() {
+        if(currentBillingCycle.isOpened()){
             return Result.Failure;
         }
-        if (this.withdrawalsInCycle >= 45) {
+        if(!isActive) {
             return Result.Failure;
         }
-        return success(new CardWithdrawn(cardId, amount, Instant.now()));
+
+        var nextCycleId = currentBillingCycle != BillingCycle.NotExisting ?
+            currentBillingCycle.id().next()
+            : BillingCycleId.fromNow(cardId);
+
+        return success(
+            new CycleOpened(
+                nextCycleId,
+                cardId,
+                nextCycleId.from(),
+                nextCycleId.to(),
+                limit,
+                Instant.now()
+            )
+        );
     }
 
-    private VirtualCreditCard cardWithdrawn(CardWithdrawn event) {
-        this.limit = limit.use(event.amount());
-        this.withdrawalsInCycle++;
+    private VirtualCreditCard cycleOpened(CycleOpened cycleOpened) {
+        currentBillingCycle = new BillingCycle(cycleOpened.cycleId(), true);
         return this;
     }
 
-    Result repay(Money amount) {
-        return success(new CardRepaid(cardId, amount, Instant.now()));
+    // No result, as we just need to accept it
+    void recordCycleClosure(
+        BillingCycleId cycleId,
+        Limit closingLimit,
+        Instant closedAt
+    ) {
+        if(!currentBillingCycle.id().equals(cycleId))
+            return;
+        if(!currentBillingCycle.isOpened())
+            return;
+
+        var closingDebt = closingLimit.used();
+
+        enqueue(
+            new CycleClosed(
+                cycleId,
+                cardId,
+                closingDebt,
+                closedAt
+            )
+        );
+
+        if(!closingDebt.isZero()){
+            enqueue(
+                new CardDeactivated(
+                    cardId,
+                    Instant.now()
+                )
+            );
+        }
     }
 
-    private VirtualCreditCard cardRepaid(CardRepaid event) {
-        this.limit = limit.topUp(event.amount());
+    private VirtualCreditCard cycleClosed(CycleClosed cycleClosed) {
+        currentBillingCycle = new BillingCycle(cycleClosed.cycleId(), false);
+        debt = cycleClosed.debt();
         return this;
     }
 
-    Result closeCycle() {
-        return success(new CycleClosed(cardId, Instant.now()));
-    }
-
-    private VirtualCreditCard billingCycleClosed(CycleClosed event) {
-        this.withdrawalsInCycle = 0;
+    private VirtualCreditCard deactivated(CardDeactivated deactivated) {
+        isActive = false;
         return this;
     }
 
@@ -94,18 +149,28 @@ class VirtualCreditCard implements Versioned {
         return switch (event) {
             case CardCreated e -> card.created(e);
             case LimitAssigned e -> card.limitAssigned(e);
-            case CardWithdrawn e -> card.cardWithdrawn(e);
-            case CardRepaid e -> card.cardRepaid(e);
-            case CycleClosed e -> card.billingCycleClosed(e);
+            case CycleOpened e -> card.cycleOpened(e);
+            case CycleClosed e -> card.cycleClosed(e);
+            case CardDeactivated e -> card.deactivated(e);
         };
-    }
-
-    Money availableLimit() {
-        return limit.available();
     }
 
     CardId id() {
         return cardId;
+    }
+
+    boolean isActive() {
+        return isActive;
+    }
+
+    public Limit getLimit() {
+        return limit;
+    }
+    public CurrencyUnit getCurrency() {
+        return currency;
+    }
+    public BillingCycle getCurrentBillingCycle() {
+        return currentBillingCycle;
     }
 
     List<VirtualCreditCardEvent> dequeuePendingEvents() {
@@ -130,15 +195,18 @@ class VirtualCreditCard implements Versioned {
     }
 }
 
-
 enum Result {
     Success, Failure
 }
 
-
-record CardId(UUID id) {
+record CardId(UUID contractId) {
     static CardId random() {
         return new CardId(UUID.randomUUID());
+    }
+
+    @Override
+    public String toString() {
+        return "Card:" + contractId;
     }
 }
 
@@ -168,48 +236,11 @@ record OwnerId(UUID id) {
     }
 }
 
-record Ownership(Set<OwnerId> owners, int version) implements Versioned {
-
-    static Ownership of(OwnerId... owners) {
-        return new Ownership(Set.of(owners), 0);
-    }
-
-    public static Ownership empty() {
-        return new Ownership(Set.of(), 0);
-    }
-
-    boolean hasAccess(OwnerId ownerId) {
-        return owners.contains(ownerId);
-    }
-
-    Ownership addAccess(OwnerId ownerId) {
-        Set<OwnerId> newOwners = new HashSet<>(owners);
-        newOwners.add(ownerId);
-        return new Ownership(newOwners, version + 1);
-    }
-
-    Ownership revoke(OwnerId ownerId) {
-        Set<OwnerId> newOwners = new HashSet<>(owners);
-        newOwners.remove(ownerId);
-        return new Ownership(newOwners, version + 1);
-    }
-
-    int size() {
-        return owners.size();
-    }
-}
-
 sealed interface VirtualCreditCardEvent {
     record CardCreated(
         CardId cartId,
+        CurrencyUnit currency,
         Instant createdAt
-    ) implements VirtualCreditCardEvent {
-    }
-
-    record CardRepaid(
-        CardId cartId,
-        Money amount,
-        Instant repaidAt
     ) implements VirtualCreditCardEvent {
     }
 
@@ -220,15 +251,26 @@ sealed interface VirtualCreditCardEvent {
     ) implements VirtualCreditCardEvent {
     }
 
-    record CardWithdrawn(
+    record CardDeactivated(
         CardId cartId,
-        Money amount,
-        Instant withdrawnAt
+        Instant deactivatedAt
+    ) implements VirtualCreditCardEvent {
+    }
+
+    record CycleOpened(
+        BillingCycleId cycleId,
+        CardId cartId,
+        LocalDate from,
+        LocalDate to,
+        Limit startingLimit,
+        Instant openedAt
     ) implements VirtualCreditCardEvent {
     }
 
     record CycleClosed(
+        BillingCycleId cycleId,
         CardId cartId,
+        Money debt,
         Instant closedAt
     ) implements VirtualCreditCardEvent {
     }
