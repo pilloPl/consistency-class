@@ -4,26 +4,29 @@ import org.javamoney.moneta.Money;
 
 class WithdrawService {
 
-    private final VirtualCreditCardDatabase virtualCreditCardDatabase;
+    private final BillingCycleDatabase billingCycleDatabase;
     private final OwnershipDatabase ownershipDatabase;
 
-    WithdrawService(VirtualCreditCardDatabase virtualCreditCardDatabase, OwnershipDatabase ownershipDatabase) {
-        this.virtualCreditCardDatabase = virtualCreditCardDatabase;
+    WithdrawService(
+        BillingCycleDatabase billingCycleDatabase,
+        OwnershipDatabase ownershipDatabase
+    ) {
+        this.billingCycleDatabase = billingCycleDatabase;
         this.ownershipDatabase = ownershipDatabase;
     }
 
-    Result withdraw(CardId cardId, Money amount, OwnerId ownerId) {
-        if (!ownershipDatabase.find(cardId).hasAccess(ownerId)) {
+    Result withdraw(BillingCycleId cycleId, Money amount, OwnerId ownerId) {
+        if (!ownershipDatabase.find(cycleId.cardId()).hasAccess(ownerId)) {
             return Result.Failure;
         }
 
-        VirtualCreditCard card = virtualCreditCardDatabase.find(cardId);
-        int expectedVersion = card.version();
+        BillingCycle billingCycle = billingCycleDatabase.find(cycleId);
+        int expectedVersion = billingCycle.version();
 
-        Result result = card.withdraw(amount);
+        Result result = billingCycle.withdraw(amount);
 
         return result == Result.Success ?
-            virtualCreditCardDatabase.save(card, expectedVersion)
+            billingCycleDatabase.save(billingCycle, expectedVersion)
             : Result.Failure;
     }
 }

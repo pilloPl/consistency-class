@@ -3,21 +3,20 @@ package io.pillopl.consistency;
 import org.javamoney.moneta.Money;
 
 class RepayService {
+    private final BillingCycleDatabase billingCycleDatabase;
 
-    private final VirtualCreditCardDatabase virtualCreditCardDatabase;
-
-    RepayService(VirtualCreditCardDatabase virtualCreditCardDatabase) {
-        this.virtualCreditCardDatabase = virtualCreditCardDatabase;
+    RepayService(BillingCycleDatabase billingCycleDatabase) {
+        this.billingCycleDatabase = billingCycleDatabase;
     }
 
-    Result repay(CardId cardId, Money amount) {
-        VirtualCreditCard card = virtualCreditCardDatabase.find(cardId);
-        int expectedVersion = card.version();
+    Result repay(BillingCycleId cycleId, Money amount) {
+        BillingCycle billingCycle = billingCycleDatabase.find(cycleId);
+        int expectedVersion = billingCycle.version();
 
-        Result result = card.repay(amount);
+        Result result = billingCycle.repay(amount);
 
         return result == Result.Success ?
-            virtualCreditCardDatabase.save(card, expectedVersion)
+            billingCycleDatabase.save(billingCycle, expectedVersion)
             : result;
 
     }
