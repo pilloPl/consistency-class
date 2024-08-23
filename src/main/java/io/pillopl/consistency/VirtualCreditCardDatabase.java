@@ -1,5 +1,7 @@
 package io.pillopl.consistency;
 
+import static io.pillopl.consistency.EventStream.aggregateStream;
+
 class VirtualCreditCardDatabase {
     private final EventStore eventStore;
 

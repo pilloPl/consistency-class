@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static io.pillopl.consistency.BillingCycleEvent.*;
+import static io.pillopl.consistency.EventStream.aggregateStream;
 import static io.pillopl.consistency.Result.Success;
 
 
@@ -73,26 +74,8 @@ class BillingCycle implements Versioned {
         return recreate(events);
     }
 
-    static BillingCycle recreate(List<BillingCycleEvent> stream) {
-        return stream.stream()
-            .reduce(
-                new BillingCycle(),
-                BillingCycle::evolve,
-                (cycle1, cycle2) -> cycle1
-            );
-    }
-
-    void onCycleOpened(CardId cardId, VirtualCreditCardEvent.CycleOpened cycleOpened) {
-        enqueue(
-            new CycleOpened(
-                cycleOpened.cycleId(),
-                cycleOpened.cartId(),
-                cycleOpened.from(),
-                cycleOpened.to(),
-                cycleOpened.startingLimit(),
-                cycleOpened.openedAt()
-            )
-        );
+    static BillingCycle recreate(List<BillingCycleEvent> events) {
+        return aggregateStream(events, BillingCycle::evolve, BillingCycle::new);
     }
 
     static BillingCycle openCycle(BillingCycleId id, CardId cardId, LocalDate from, LocalDate to, Limit startingLimit) {

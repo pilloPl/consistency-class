@@ -7,9 +7,50 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
 
+import static io.pillopl.consistency.EventStream.aggregateStream;
 import static io.pillopl.consistency.Result.Success;
 import static io.pillopl.consistency.VirtualCreditCardEvent.*;
 
+
+sealed interface VirtualCreditCardEvent {
+    record CardCreated(
+        CardId cartId,
+        CurrencyUnit currency,
+        Instant createdAt
+    ) implements VirtualCreditCardEvent {
+    }
+
+    record LimitAssigned(
+        CardId cartId,
+        Money amount,
+        Instant assignedAt
+    ) implements VirtualCreditCardEvent {
+    }
+
+    record CardDeactivated(
+        CardId cartId,
+        Instant deactivatedAt
+    ) implements VirtualCreditCardEvent {
+    }
+
+    record CycleOpened(
+        BillingCycleId cycleId,
+        CardId cartId,
+        LocalDate from,
+        LocalDate to,
+        Limit startingLimit,
+        Instant openedAt
+    ) implements VirtualCreditCardEvent {
+    }
+
+    record CycleClosed(
+        BillingCycleId cycleId,
+        CardId cartId,
+        Money debt,
+        Instant closedAt
+    ) implements VirtualCreditCardEvent {
+    }
+}
 
 class VirtualCreditCard implements Versioned {
     record BillingCycle(BillingCycleId id, boolean isOpened) {
@@ -34,13 +75,8 @@ class VirtualCreditCard implements Versioned {
         return recreate(events);
     }
 
-    static VirtualCreditCard recreate(List<VirtualCreditCardEvent> stream) {
-        return stream.stream()
-            .reduce(
-                new VirtualCreditCard(),
-                VirtualCreditCard::evolve,
-                (card1, card2) -> card1
-            );
+    static VirtualCreditCard recreate(List<VirtualCreditCardEvent> events) {
+        return aggregateStream(events, VirtualCreditCard::evolve, VirtualCreditCard::new);
     }
 
     private VirtualCreditCard() {
@@ -158,11 +194,9 @@ class VirtualCreditCard implements Versioned {
     CardId id() {
         return cardId;
     }
-
     boolean isActive() {
         return isActive;
     }
-
     public Limit getLimit() {
         return limit;
     }
@@ -233,45 +267,5 @@ record Limit(Money max, Money used) {
 record OwnerId(UUID id) {
     static OwnerId random() {
         return new OwnerId(UUID.randomUUID());
-    }
-}
-
-sealed interface VirtualCreditCardEvent {
-    record CardCreated(
-        CardId cartId,
-        CurrencyUnit currency,
-        Instant createdAt
-    ) implements VirtualCreditCardEvent {
-    }
-
-    record LimitAssigned(
-        CardId cartId,
-        Money amount,
-        Instant assignedAt
-    ) implements VirtualCreditCardEvent {
-    }
-
-    record CardDeactivated(
-        CardId cartId,
-        Instant deactivatedAt
-    ) implements VirtualCreditCardEvent {
-    }
-
-    record CycleOpened(
-        BillingCycleId cycleId,
-        CardId cartId,
-        LocalDate from,
-        LocalDate to,
-        Limit startingLimit,
-        Instant openedAt
-    ) implements VirtualCreditCardEvent {
-    }
-
-    record CycleClosed(
-        BillingCycleId cycleId,
-        CardId cartId,
-        Money debt,
-        Instant closedAt
-    ) implements VirtualCreditCardEvent {
     }
 }

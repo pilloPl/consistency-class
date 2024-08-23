@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public class EventStore {
@@ -64,12 +66,25 @@ record EventStream(String id, List<EventEnvelope> events) {
         return new EventStream(id, Stream.concat(this.events.stream(), events.stream()).toList());
     }
 
-    <T> List<T> eventsOfType(Class<T> eventType) {
+    <Event> List<Event > eventsOfType(Class<Event> eventType) {
         return events().stream()
             .map(EventEnvelope::data)
             .filter(eventType::isInstance)
-            .map(event -> (T) event)
+            .map(event -> (Event) event)
             .toList();
+    }
+
+    static <State, Event> State aggregateStream(
+        List<Event> events,
+        BiFunction<State, Event, State> evolve,
+        Supplier<State> initial
+    ) {
+        return events.stream()
+            .reduce(
+                initial.get(),
+                evolve,
+                (prev, next) -> prev
+            );
     }
 }
 
