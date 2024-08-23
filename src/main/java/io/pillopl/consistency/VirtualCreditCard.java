@@ -30,14 +30,8 @@ class VirtualCreditCard {
     }
 
     Result assignLimit(Money limit) {
-        limitAssigned(new LimitAssigned(UUID.randomUUID(), cardId, Instant.now(), limit));
+        this.limit = Limit.initial(limit);
         return Success;
-    }
-
-    private VirtualCreditCard limitAssigned(LimitAssigned event) {
-        this.limit = Limit.initial(event.amount());
-        pendingEvents.add(event);
-        return this;
     }
 
     Result withdraw(Money amount) {
@@ -47,37 +41,19 @@ class VirtualCreditCard {
         if (this.withdrawalsInCycle >= 45) {
             return Result.Failure;
         }
-        cardWithdrawn(new CardWithdrawn(UUID.randomUUID(), cardId, Instant.now(), amount));
-        return Success;
-    }
-
-    private VirtualCreditCard cardWithdrawn(CardWithdrawn event) {
-        this.limit = limit.use(event.amount());
+        this.limit = limit.use(amount);
         this.withdrawalsInCycle++;
-        pendingEvents.add(event);
-        return this;
+        return Success;
     }
 
     Result repay(Money amount) {
-        cardRepaid(new CardRepaid(UUID.randomUUID(), cardId, Instant.now(), amount));
+        this.limit = limit.topUp(amount);
         return Success;
-    }
-
-    private VirtualCreditCard cardRepaid(CardRepaid event) {
-        this.limit = limit.topUp(event.amount());
-        pendingEvents.add(event);
-        return this;
     }
 
     Result closeCycle() {
-        billingCycleClosed(new CycleClosed(UUID.randomUUID(), cardId, Instant.now()));
-        return Success;
-    }
-
-    private VirtualCreditCard billingCycleClosed(CycleClosed event) {
         this.withdrawalsInCycle = 0;
-        pendingEvents.add(event);
-        return this;
+        return Success;
     }
 
     Money availableLimit() {
@@ -86,14 +62,6 @@ class VirtualCreditCard {
 
     CardId id() {
         return cardId;
-    }
-
-    List<Event> pendingEvents() {
-        return Collections.unmodifiableList(pendingEvents);
-    }
-
-    void flush() {
-        pendingEvents.clear();
     }
 }
 

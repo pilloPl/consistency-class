@@ -7,19 +7,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 class VirtualCreditCardDatabase {
 
-     private final Map<CardId, List<Event>> cards = new ConcurrentHashMap<>();
+     private final Map<CardId, VirtualCreditCard> cards = new ConcurrentHashMap<>();
 
      void save(VirtualCreditCard card) {
-         List<Event> stream = cards.getOrDefault(card.id(), new ArrayList<>());
-         stream.addAll(card.pendingEvents());
-         cards.put(card.id(), stream);
-         card.flush();
+         cards.put(card.id(), card);
      }
 
      VirtualCreditCard find(CardId cardId) {
-         List<Event> stream = cards.getOrDefault(cardId, new ArrayList<>());
-         VirtualCreditCard recreate = VirtualCreditCard.recreate(cardId, stream);
-         return recreate;
+         return cards.get(cardId);
      }
 }
 
