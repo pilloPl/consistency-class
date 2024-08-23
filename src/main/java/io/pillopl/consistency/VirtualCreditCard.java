@@ -8,13 +8,12 @@ import java.util.*;
 import static io.pillopl.consistency.Result.Success;
 import static io.pillopl.consistency.VirtualCreditCardEvent.*;
 
-class VirtualCreditCard implements Versioned {
+class VirtualCreditCard {
 
     private CardId cardId;
     private Limit limit;
     private int withdrawalsInCycle;
     private final List<VirtualCreditCardEvent> pendingEvents = new ArrayList<>();
-    private int version;
 
     static VirtualCreditCard withLimit(Money limit) {
         var cartId = CardId.random();
@@ -90,7 +89,6 @@ class VirtualCreditCard implements Versioned {
     }
 
     private static VirtualCreditCard evolve(VirtualCreditCard card, VirtualCreditCardEvent event) {
-        card.version++;
         return switch (event) {
             case CardCreated e -> card.created(e);
             case LimitAssigned e -> card.limitAssigned(e);
@@ -122,11 +120,6 @@ class VirtualCreditCard implements Versioned {
     void enqueue(VirtualCreditCardEvent event) {
         evolve(this, event);
         pendingEvents.add(event);
-    }
-
-    @Override
-    public int version() {
-        return version;
     }
 }
 
@@ -168,14 +161,14 @@ record OwnerId(UUID id) {
     }
 }
 
-record Ownership(Set<OwnerId> owners, int version) implements Versioned {
+record Ownership(Set<OwnerId> owners) {
 
     static Ownership of(OwnerId... owners) {
-        return new Ownership(Set.of(owners), 0);
+        return new Ownership(Set.of(owners));
     }
 
     public static Ownership empty() {
-        return new Ownership(Set.of(), 0);
+        return new Ownership(Set.of());
     }
 
     boolean hasAccess(OwnerId ownerId) {
@@ -185,13 +178,13 @@ record Ownership(Set<OwnerId> owners, int version) implements Versioned {
     Ownership addAccess(OwnerId ownerId) {
         Set<OwnerId> newOwners = new HashSet<>(owners);
         newOwners.add(ownerId);
-        return new Ownership(newOwners, version + 1);
+        return new Ownership(newOwners);
     }
 
     Ownership revoke(OwnerId ownerId) {
         Set<OwnerId> newOwners = new HashSet<>(owners);
         newOwners.remove(ownerId);
-        return new Ownership(newOwners, version + 1);
+        return new Ownership(newOwners);
     }
 
     int size() {

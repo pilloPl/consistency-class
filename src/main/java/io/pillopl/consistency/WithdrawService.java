@@ -18,12 +18,11 @@ class WithdrawService {
         }
 
         VirtualCreditCard card = virtualCreditCardDatabase.find(cardId);
-        int expectedVersion = card.version();
 
         Result result = card.withdraw(amount);
 
         return result == Result.Success ?
-            virtualCreditCardDatabase.save(card, expectedVersion)
+            virtualCreditCardDatabase.save(card)
             : Result.Failure;
     }
 }

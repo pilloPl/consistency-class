@@ -3,13 +3,12 @@ package io.pillopl.consistency;
 class VirtualCreditCardDatabase {
     private final EventStore eventStore = new EventStore();
 
-    Result save(VirtualCreditCard card, int expectedVersion) {
+    Result save(VirtualCreditCard card) {
         var streamId = card.id().id().toString();
 
         return eventStore.appendToStream(
             streamId,
-            card.dequeuePendingEvents(),
-            expectedVersion
+            card.dequeuePendingEvents()
         );
     }
 
@@ -26,8 +25,8 @@ class OwnershipDatabase {
     private final DatabaseCollection<Ownership> ownerships =
         Database.collection(Ownership.class);
 
-    Result save(CardId cardId, Ownership ownership, int expectedVersion) {
-        return ownerships.save(cardId.id().toString(), ownership, expectedVersion);
+    Result save(CardId cardId, Ownership ownership) {
+        return ownerships.save(cardId.id().toString(), ownership);
     }
 
     Ownership find(CardId cardId) {

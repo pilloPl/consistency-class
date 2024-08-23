@@ -6,6 +6,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import static io.pillopl.consistency.RecordWithVersion.ignoreVersionCheck;
+
 interface Versioned {
     int version();
 }
@@ -16,6 +18,7 @@ interface VersionedWithAutoIncrement extends Versioned {
 
 record RecordWithVersion(Object record, int version) {
     static RecordWithVersion noRecord = new RecordWithVersion(null, 0);
+    static int ignoreVersionCheck = -1;
 }
 
 class Database {
@@ -35,28 +38,28 @@ class DatabaseCollection<T> {
     Result save(String id, T record) {
         return save(id, record, record instanceof Versioned versioned ?
             versioned.version()
-            : entries.getOrDefault(id, RecordWithVersion.noRecord).version()
+            : ignoreVersionCheck
         );
     }
 
     Result save(String id, T record, int expectedVersion) {
-        var newExpectedVersion = expectedVersion + 1;
         var wasUpdated = new AtomicBoolean(false);
 
         entries.compute(id, (key, currentValue) -> {
             var currentVersion = currentValue != null ? currentValue.version() : 0;
+            var nextVersion = currentVersion + 1;
 
-            if (currentVersion != expectedVersion) {
+            if (expectedVersion != ignoreVersionCheck && currentVersion != expectedVersion) {
                 // Version conflict, don't update the value
                 return currentValue;  // Keep the currentValue in the map
             }
 
             if (record instanceof VersionedWithAutoIncrement versioned) {
-                versioned.setVersion(newExpectedVersion);
+                versioned.setVersion(nextVersion);
             }
             wasUpdated.set(true);
 
-            return new RecordWithVersion(record, newExpectedVersion);
+            return new RecordWithVersion(record, nextVersion);
         });
 
         return wasUpdated.get() ?

@@ -15,6 +15,18 @@ public class EventStore {
             .eventsOfType(eventType);
     }
 
+    <T> Result appendToStream(String streamId, List<T> events) {
+
+        var stream = existingEventStreamOrEmpty(streamId);
+        var version = new AtomicInteger(stream.events().size());
+
+        var newEvents = events.stream().map(e ->
+            EventEnvelope.from(streamId, e, version.incrementAndGet())
+        ).toList();
+
+        return streams.save(streamId, stream.append(newEvents));
+    }
+
     <T> Result appendToStream(String streamId, List<T> events, int expectedVersion) {
         var version = new AtomicInteger(expectedVersion);
 
