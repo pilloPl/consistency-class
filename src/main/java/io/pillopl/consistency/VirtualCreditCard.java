@@ -22,17 +22,7 @@ class VirtualCreditCard {
     }
 
     static VirtualCreditCard recreate(CardId cardId, List<Event> stream) {
-        return stream.stream()
-                .reduce(new VirtualCreditCard(cardId), (card, event) -> {
-                    switch (event) {
-                        case LimitAssigned e -> card.limitAssigned(e);
-                        case CardWithdrawn e -> card.cardWithdrawn(e);
-                        case CardRepaid e -> card.cardRepaid(e);
-                        case CycleClosed e -> card.billingCycleClosed(e);
-                        default -> {}
-                    }
-                    return card;
-                }, (card1, card2) -> card1);
+        return null;
     }
 
     VirtualCreditCard(CardId cardId) {
