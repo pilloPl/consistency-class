@@ -3,12 +3,20 @@ package io.pillopl.consistency;
 import org.javamoney.moneta.Money;
 import org.junit.jupiter.api.Test;
 
+import javax.money.MonetaryAmount;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static io.pillopl.consistency.Result.Failure;
 import static io.pillopl.consistency.Result.Success;
 import static org.javamoney.moneta.Money.of;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WithdrawingTest {
 
@@ -40,7 +48,6 @@ class WithdrawingTest {
         assertEquals(Success, result);
         assertEquals(Money.of(50, "USD"), availableLimit(creditCard));
     }
-
 
     @Test
     void cantWithdrawMoreThanLimit() {
@@ -77,6 +84,37 @@ class WithdrawingTest {
         //then
         assertEquals(Failure, result);
         assertEquals(Money.of(55, "USD"), availableLimit(creditCard));
+    }
+
+    @Test
+    void cantUpdateConcurrently() throws InterruptedException {
+        //given
+        CardId creditCard = newCreditCard();
+        //and
+        addLimitService.addLimit(creditCard, Money.of(100, "USD"));
+        //and
+        ownershipService.addAccess(creditCard, OSKAR);
+
+        List<Result> results = new ArrayList<>();
+        //when
+
+        ExecutorService executor = Executors.newFixedThreadPool(5);
+        for (int i = 0; i < 20; i++) {
+            executor.execute(() -> {
+                try {
+                    Result result = withdrawService.withdraw(creditCard, of(1, "USD"), OSKAR);
+                    results.add(result);
+                } catch (Exception e) {
+                    // ignore
+                }
+            });
+        }
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        //then
+        assertTrue(results.contains(Result.Failure));
+        assertTrue(availableLimit(creditCard).isGreaterThan(Money.of(80, "USD")));
     }
 
     @Test
@@ -172,6 +210,37 @@ class WithdrawingTest {
         assertEquals(Success, firstAccess);
         assertEquals(Success, secondAccess);
         assertEquals(Failure, thirdAccess);
+    }
+
+
+    @Test
+    void cantAddAccessConcurrently() throws InterruptedException {
+        //given
+        CardId creditCard = newCreditCard();
+        //and
+        addLimitService.addLimit(creditCard, Money.of(100, "USD"));
+
+        //when
+
+        //then
+        List<Result> results = new ArrayList<>();
+        //when
+        ExecutorService executor = Executors.newFixedThreadPool(5);
+        for (int i = 0; i < 15; i++) {
+            executor.execute(() -> {
+                try {
+                    Result result = ownershipService.addAccess(creditCard, KUBA);
+                    results.add(result);
+                } catch (Exception e) {
+                    // ignore
+                }
+            });
+        }
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        //then
+        assertTrue(results.contains(Result.Failure));
     }
 
     @Test
